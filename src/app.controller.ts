@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AppService } from './app.service';
+import { IRequestInfoLoyalty } from './core/request-info-loyalty.interface';
+import { IResponseInfoLoyalty } from './core/response-info-loyalty.interface';
 import { LoyaltyTransactionRequestDto } from './dto/request/loyalty-transaction.request.dto';
 
 @Controller()
@@ -20,7 +22,9 @@ export class AppController {
   }
 
   @MessagePattern('mp_loyalty_point')
-  async handleGetLoyaltyPoint(@Payload() data: any) {
+  async handleGetLoyaltyPoint(
+    @Payload() data: IRequestInfoLoyalty,
+  ): Promise<IResponseInfoLoyalty> {
     try {
       const loyaltyDto: LoyaltyTransactionRequestDto = {
         transaction_id: data.transaction_id,
@@ -32,20 +36,16 @@ export class AppController {
         loyaltyDto,
       );
 
-      const point = {
-        transaction_id: loyaltyCustomer.transaction_id,
-        customer_id: loyaltyCustomer.customer_id,
-        point: loyaltyCustomer.poin,
-        total_trx: loyaltyCustomer.total_trx,
-        remark: loyaltyCustomer.remark,
-        tier: loyaltyCustomer.tier.name,
-      };
-
       this.logger.log(
         `[MessagePattern mp_loyalty_point] [${loyaltyDto.transaction_id}] Calculate loyalty point successfully`,
       );
 
-      return point;
+      return {
+        point: loyaltyCustomer.poin,
+        total_trx: loyaltyCustomer.total_trx,
+        remark: loyaltyCustomer.remark,
+        tier: loyaltyCustomer.tier.name,
+      } as IResponseInfoLoyalty;
     } catch (error) {
       this.logger.log(`[MessagePattern mp_loyalty_point] ${error}`);
       throw new InternalServerErrorException();
