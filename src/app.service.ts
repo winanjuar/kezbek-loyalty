@@ -24,8 +24,12 @@ export class AppService {
     private loyaltyCustomerHistoryRepository: LoyaltyCustomerHistoryRepository,
   ) {}
 
-  getHello(): string {
-    return 'Hello World!';
+  private __getDateDiff(end: Date, start: Date): number {
+    const msInDay = 24 * 60 * 60 * 1000;
+    const endDate = new Date(end);
+    const daysDiff =
+      Math.floor((Number(endDate) - Number(start)) / msInDay) || 0;
+    return daysDiff;
   }
 
   private async __getTierMaster(level: number) {
@@ -36,60 +40,79 @@ export class AppService {
     return await this.loyaltyTierMasterRepository.getTierMasterById(id);
   }
 
-  async __getPointConfig(tier_id: string, at_trx: number) {
+  private async __getPointConfig(tier_id: string, at_trx: number) {
     return await this.loyaltyPointConfigRepository.getLoyaltyPoint(
       tier_id,
       at_trx,
     );
   }
 
-  async __getCurrentLoyalty(customer_id: string) {
+  private async __getCurrentLoyalty(customer_id: string) {
     return await this.loyaltyCustomerActualRepository.getCurrentLoyalty(
       customer_id,
     );
   }
 
-  async __saveCurrentLoyalty(data: Partial<LoyaltyCustomerActual>) {
+  private async __saveCurrentLoyalty(data: Partial<LoyaltyCustomerActual>) {
     return await this.loyaltyCustomerActualRepository.saveCurrentLoyalty(data);
   }
 
-  async __checkPossibilityUpdateTier(
+  private async __checkPossibilityUpdateTier(
     updateTierDto: UpdateTierDto,
   ): Promise<ITierResponse> {
     const lastTier = await this.__getTierMasterById(updateTierDto.tier_id);
+    const tierJourney =
+      await this.loyaltyTierJourneyRepository.getTierJourneyById(
+        updateTierDto.tier_id,
+      );
+    if (updateTierDto.days_without_trx <= 30) {
+      if (
+        lastTier.name === ETierName.GOLD &&
+        updateTierDto.total_trx >= lastTier.max_trx
+      ) {
+        console.log('Keep on maximum level');
+        return {
+          status: ETierStatus.KEEP,
+          current_tier: lastTier,
+          total_trx: updateTierDto.total_trx + 1,
+          remark: ETierRemark.MAXIMUM,
+        } as ITierResponse;
+      }
 
-    // maximum level
-    if (
-      lastTier.name === ETierName.GOLD &&
-      updateTierDto.total_trx > lastTier.max_trx
-    ) {
+      if (updateTierDto.total_trx === lastTier.max_trx) {
+        console.log('Upgrade to next level');
+        return {
+          status: ETierStatus.UPGRADE,
+          current_tier: await this.__getTierMasterById(tierJourney.next_1),
+          total_trx: 1,
+          remark: ETierRemark.UPGRADE,
+        } as ITierResponse;
+      }
+
+      console.log('Keep on this level');
       return {
         status: ETierStatus.KEEP,
-        current_tier: lastTier,
+        current_tier: await this.__getTierMasterById(updateTierDto.tier_id),
         total_trx: updateTierDto.total_trx + 1,
-        remark: ETierRemark.MAXIMUM,
+        remark: ETierRemark.NONE,
       } as ITierResponse;
-    }
-
-    if (updateTierDto.total_trx === lastTier.max_trx) {
-      const tierJourney =
-        await this.loyaltyTierJourneyRepository.getTierJourneyById(
-          updateTierDto.tier_id,
-        );
+    } else if (updateTierDto.days_without_trx <= 60) {
+      console.log('Downgrade to lower level');
       return {
-        status: ETierStatus.UPGRADE,
-        current_tier: await this.__getTierMasterById(tierJourney.next_1),
+        status: ETierStatus.DOWNGRADE,
+        current_tier: await this.__getTierMasterById(tierJourney.prev_1),
         total_trx: 1,
-        remark: ETierRemark.UPGRADE,
+        remark: ETierRemark.DOWNGRADE,
+      } as ITierResponse;
+    } else {
+      console.log('Reset to the lowest level');
+      return {
+        status: ETierStatus.RESET,
+        current_tier: await this.__getTierMaster(ETierLevel.BRONZE),
+        total_trx: 1,
+        remark: ETierRemark.RESET,
       } as ITierResponse;
     }
-
-    return {
-      status: ETierStatus.KEEP,
-      current_tier: await this.__getTierMasterById(updateTierDto.tier_id),
-      total_trx: updateTierDto.total_trx + 1,
-      remark: ETierRemark.NONE,
-    } as ITierResponse;
   }
 
   async createNewTransaction(loyaltyDto: LoyaltyTransactionRequestDto) {
@@ -99,6 +122,7 @@ export class AppService {
 
     let loyaltyCustomer: LoyaltyCustomerActual;
     if (!currentLoyalty) {
+      console.log('Setting up first transaction');
       const tier = await this.__getTierMaster(ETierLevel.BRONZE);
       const initialLoyalty: Partial<LoyaltyCustomerActual> = {
         customer_id: loyaltyDto.customer_id,
@@ -109,40 +133,62 @@ export class AppService {
         tier,
         remark: ETierRemark.FIRST_TRANSACTION,
       };
+
+      const initialHistory: Partial<LoyaltyCustomerHistory> = {
+        customer_id: loyaltyDto.customer_id,
+        transaction_id: loyaltyDto.transaction_id,
+        transaction_time: loyaltyDto.transaction_time,
+        poin: 0,
+        total_trx: 1,
+        tier_id: tier.id,
+        remark: ETierRemark.FIRST_TRANSACTION,
+      };
+
       loyaltyCustomer = await this.__saveCurrentLoyalty(initialLoyalty);
       await this.loyaltyCustomerHistoryRepository.saveCurrentLoyalty(
-        initialLoyalty,
+        initialHistory,
       );
     } else {
+      const dateDiff = this.__getDateDiff(
+        loyaltyDto.transaction_time,
+        currentLoyalty.transaction_time,
+      );
+
       const updateTierDto: UpdateTierDto = {
         tier_id: currentLoyalty.tier.id,
         total_trx: currentLoyalty.total_trx,
-        transaction_time: currentLoyalty.transaction_time,
+        days_without_trx: dateDiff,
       };
 
       const checkResult = await this.__checkPossibilityUpdateTier(
         updateTierDto,
       );
-      if (checkResult.status === ETierStatus.UPGRADE) {
-        currentLoyalty.tier = checkResult.current_tier;
-      }
 
       const loyaltyPoint = await this.__getPointConfig(
         checkResult.current_tier.id,
         checkResult.total_trx,
       );
+      currentLoyalty.transaction_time = loyaltyDto.transaction_time;
+      currentLoyalty.transaction_id = loyaltyDto.transaction_id;
       currentLoyalty.poin = loyaltyPoint;
-      currentLoyalty.remark = checkResult.remark;
       currentLoyalty.total_trx = checkResult.total_trx;
+      currentLoyalty.tier = checkResult.current_tier;
+      currentLoyalty.remark = checkResult.remark;
       loyaltyCustomer = await this.__saveCurrentLoyalty(currentLoyalty);
+
       const loyaltyHistory: Partial<LoyaltyCustomerHistory> = {
-        ...currentLoyalty,
-        ...loyaltyDto,
+        customer_id: loyaltyDto.customer_id,
+        transaction_time: loyaltyDto.transaction_time,
+        transaction_id: loyaltyDto.transaction_id,
+        poin: loyaltyPoint,
+        total_trx: checkResult.total_trx,
+        remark: checkResult.remark,
+        tier_id: checkResult.current_tier.id,
       };
       await this.loyaltyCustomerHistoryRepository.saveCurrentLoyalty(
         loyaltyHistory,
       );
     }
-    return { loyaltyCustomer };
+    return loyaltyCustomer;
   }
 }

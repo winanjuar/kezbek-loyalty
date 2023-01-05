@@ -9,8 +9,8 @@ export class LoyaltyTierJourney {
   next_1: string;
 
   @Column('uuid')
-  prev_1: number;
+  prev_1: string;
 
   @Column('uuid')
-  prev_2: number;
+  prev_2: string;
 }
