@@ -23,7 +23,7 @@ export class LoyaltyCustomerActual {
   transaction_time: Date;
 
   @Column()
-  poin: number;
+  point: number;
 
   @Column()
   total_trx: number;

@@ -41,7 +41,7 @@ export class AppController {
       );
 
       return {
-        point: loyaltyCustomer.poin,
+        point: loyaltyCustomer.point,
         total_trx: loyaltyCustomer.total_trx,
         remark: loyaltyCustomer.remark,
         tier: loyaltyCustomer.tier.name,

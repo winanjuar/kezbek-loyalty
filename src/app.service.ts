@@ -128,7 +128,7 @@ export class AppService {
         customer_id: loyaltyDto.customer_id,
         transaction_id: loyaltyDto.transaction_id,
         transaction_time: loyaltyDto.transaction_time,
-        poin: 0,
+        point: 0,
         total_trx: 1,
         tier,
         remark: ETierRemark.FIRST_TRANSACTION,
@@ -138,7 +138,7 @@ export class AppService {
         customer_id: loyaltyDto.customer_id,
         transaction_id: loyaltyDto.transaction_id,
         transaction_time: loyaltyDto.transaction_time,
-        poin: 0,
+        point: 0,
         total_trx: 1,
         tier_id: tier.id,
         remark: ETierRemark.FIRST_TRANSACTION,
@@ -170,7 +170,7 @@ export class AppService {
       );
       currentLoyalty.transaction_time = loyaltyDto.transaction_time;
       currentLoyalty.transaction_id = loyaltyDto.transaction_id;
-      currentLoyalty.poin = loyaltyPoint;
+      currentLoyalty.point = loyaltyPoint;
       currentLoyalty.total_trx = checkResult.total_trx;
       currentLoyalty.tier = checkResult.current_tier;
       currentLoyalty.remark = checkResult.remark;
@@ -180,7 +180,7 @@ export class AppService {
         customer_id: loyaltyDto.customer_id,
         transaction_time: loyaltyDto.transaction_time,
         transaction_id: loyaltyDto.transaction_id,
-        poin: loyaltyPoint,
+        point: loyaltyPoint,
         total_trx: checkResult.total_trx,
         remark: checkResult.remark,
         tier_id: checkResult.current_tier.id,
