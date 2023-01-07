@@ -10,6 +10,8 @@ import { LoyaltyTransactionRequestDto } from './dto/request/loyalty-transaction.
 import { LoyaltyTierMaster } from './entity/loyalty-tier-master.entity';
 import { LoyaltyPointConfig } from './entity/loyalty-point-config.entity';
 import { ETierName } from './core/tier-name.enum';
+import { IResponseInfoLoyalty } from './core/response-info-loyalty.interface';
+import { ETierRemark } from './core/tier-remark.enum';
 
 describe('AppController', () => {
   let controller: AppController;
@@ -18,6 +20,7 @@ describe('AppController', () => {
   let mockLoyaltyPointConfig: LoyaltyPointConfig;
 
   let mockLoyaltyCustomerActualResponse: LoyaltyCustomerActualResponseDto;
+  let mockResponseInfoLoyalty: IResponseInfoLoyalty;
   let mockLoyaltyDto: LoyaltyTransactionRequestDto;
 
   const mockAppService = {
@@ -115,6 +118,62 @@ describe('AppController', () => {
       // act
       const funCreateNewTransaction =
         controller.createNewTransaction(mockLoyaltyDto);
+
+      // assert
+      await expect(funCreateNewTransaction).rejects.toEqual(
+        new InternalServerErrorException(),
+      );
+      expect(spyCreateNewTransaction).toHaveBeenCalledTimes(1);
+      expect(spyCreateNewTransaction).toHaveBeenCalledWith(mockLoyaltyDto);
+    });
+  });
+
+  describe('handleGetLoyaltyPoint', () => {
+    it('should response single response info customer loyalty', async () => {
+      // arrange
+      mockLoyaltyCustomerActual.remark = ETierRemark.NONE;
+
+      mockLoyaltyDto = {
+        customer_id: mockLoyaltyCustomerActual.customer_id,
+        transaction_id: faker.datatype.uuid(),
+        transaction_time: new Date('2023-01-06T05:47:34.509Z'),
+      };
+
+      const spyCreateNewTransaction = jest
+        .spyOn(mockAppService, 'createNewTransaction')
+        .mockResolvedValue(mockLoyaltyCustomerActual);
+
+      mockResponseInfoLoyalty = {
+        point: mockLoyaltyCustomerActual.point,
+        total_trx: mockLoyaltyCustomerActual.total_trx,
+        remark: mockLoyaltyCustomerActual.remark,
+        tier: mockLoyaltyCustomerActual.tier.name,
+      };
+
+      // act
+      const response = await controller.handleGetLoyaltyPoint(mockLoyaltyDto);
+
+      // assert
+      expect(response).toEqual(mockResponseInfoLoyalty);
+      expect(spyCreateNewTransaction).toHaveBeenCalledTimes(1);
+      expect(spyCreateNewTransaction).toHaveBeenCalledWith(mockLoyaltyDto);
+    });
+
+    it('should throw internal server error when unknown error occured', async () => {
+      // arrange
+      mockLoyaltyDto = {
+        customer_id: mockLoyaltyCustomerActual.customer_id,
+        transaction_id: faker.datatype.uuid(),
+        transaction_time: new Date('2023-01-06T05:47:34.509Z'),
+      };
+
+      const spyCreateNewTransaction = jest
+        .spyOn(mockAppService, 'createNewTransaction')
+        .mockRejectedValue(new InternalServerErrorException());
+
+      // act
+      const funCreateNewTransaction =
+        controller.handleGetLoyaltyPoint(mockLoyaltyDto);
 
       // assert
       await expect(funCreateNewTransaction).rejects.toEqual(

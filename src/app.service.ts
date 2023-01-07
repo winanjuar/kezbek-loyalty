@@ -1,11 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ETierStatus } from './core/tier-status.enum';
 import { ITierResponse } from './core/tier-response.interface';
 import { ETierLevel } from './core/tier-level.enum';
 import { ETierName } from './core/tier-name.enum';
 import { ETierRemark } from './core/tier-remark.enum';
 import { LoyaltyTransactionRequestDto } from './dto/request/loyalty-transaction.request.dto';
-import { UpdateTierDto } from './dto/request/update-tier.dto';
 import { LoyaltyCustomerActual } from './entity/loyalty-customer-actual.entity';
 import { LoyaltyCustomerActualRepository } from './repository/loyalty-customer-actual.repository';
 import { LoyaltyPointConfigRepository } from './repository/loyalty-point-catalog.repository';
@@ -13,9 +12,12 @@ import { LoyaltyTierJourneyRepository } from './repository/loyalty-tier-journey.
 import { LoyaltyTierMasterRepository } from './repository/loyalty-tier-master.repository';
 import { LoyaltyCustomerHistoryRepository } from './repository/loyalty-customer-history.repository';
 import { LoyaltyCustomerHistory } from './entity/loyalty-customer-history.entity';
+import { IUpdateTier } from './core/update-tier.interface';
 
 @Injectable()
 export class AppService {
+  private readonly logger = new Logger(AppService.name);
+
   constructor(
     private loyaltyTierMasterRepository: LoyaltyTierMasterRepository,
     private loyaltyTierJourneyRepository: LoyaltyTierJourneyRepository,
@@ -58,29 +60,29 @@ export class AppService {
   }
 
   private async __checkPossibilityUpdateTier(
-    updateTierDto: UpdateTierDto,
+    updateTier: IUpdateTier,
   ): Promise<ITierResponse> {
-    const lastTier = await this.__getTierMasterById(updateTierDto.tier_id);
+    const lastTier = await this.__getTierMasterById(updateTier.tier_id);
     const tierJourney =
       await this.loyaltyTierJourneyRepository.getTierJourneyById(
-        updateTierDto.tier_id,
+        updateTier.tier_id,
       );
-    if (updateTierDto.days_without_trx <= 30) {
+    if (updateTier.days_without_trx <= 30) {
       if (
         lastTier.name === ETierName.GOLD &&
-        updateTierDto.total_trx >= lastTier.max_trx
+        updateTier.total_trx >= lastTier.max_trx
       ) {
-        console.log('Keep on maximum level');
+        this.logger.log('Keep loyalty customer on maximum level');
         return {
           status: ETierStatus.KEEP,
           current_tier: lastTier,
-          total_trx: updateTierDto.total_trx + 1,
+          total_trx: updateTier.total_trx + 1,
           remark: ETierRemark.MAXIMUM,
         } as ITierResponse;
       }
 
-      if (updateTierDto.total_trx === lastTier.max_trx) {
-        console.log('Upgrade to next level');
+      if (updateTier.total_trx === lastTier.max_trx) {
+        this.logger.log('Upgrade loyalty customer to next level');
         return {
           status: ETierStatus.UPGRADE,
           current_tier: await this.__getTierMasterById(tierJourney.next_1),
@@ -89,15 +91,15 @@ export class AppService {
         } as ITierResponse;
       }
 
-      console.log('Keep on this level');
+      this.logger.log('Keep loyalty customer at same level');
       return {
         status: ETierStatus.KEEP,
-        current_tier: await this.__getTierMasterById(updateTierDto.tier_id),
-        total_trx: updateTierDto.total_trx + 1,
+        current_tier: await this.__getTierMasterById(updateTier.tier_id),
+        total_trx: updateTier.total_trx + 1,
         remark: ETierRemark.NONE,
       } as ITierResponse;
-    } else if (updateTierDto.days_without_trx <= 60) {
-      console.log('Downgrade to lower level');
+    } else if (updateTier.days_without_trx <= 60) {
+      this.logger.log('Downgrade loyalty customer to lower level');
       return {
         status: ETierStatus.DOWNGRADE,
         current_tier: await this.__getTierMasterById(tierJourney.prev_1),
@@ -105,7 +107,7 @@ export class AppService {
         remark: ETierRemark.DOWNGRADE,
       } as ITierResponse;
     } else {
-      console.log('Reset to the lowest level');
+      this.logger.log('Reset loyalty customer to the lowest level');
       return {
         status: ETierStatus.RESET,
         current_tier: await this.__getTierMaster(ETierLevel.BRONZE),
@@ -122,7 +124,7 @@ export class AppService {
 
     let loyaltyCustomer: LoyaltyCustomerActual;
     if (!currentLoyalty) {
-      console.log('Setting up first transaction');
+      this.logger.log('Setting up customer loyalty for first time transaction');
       const tier = await this.__getTierMaster(ETierLevel.BRONZE);
       const initialLoyalty: Partial<LoyaltyCustomerActual> = {
         customer_id: loyaltyDto.customer_id,
@@ -154,15 +156,13 @@ export class AppService {
         currentLoyalty.transaction_time,
       );
 
-      const updateTierDto: UpdateTierDto = {
+      const updateTier: IUpdateTier = {
         tier_id: currentLoyalty.tier.id,
         total_trx: currentLoyalty.total_trx,
         days_without_trx: dateDiff,
       };
 
-      const checkResult = await this.__checkPossibilityUpdateTier(
-        updateTierDto,
-      );
+      const checkResult = await this.__checkPossibilityUpdateTier(updateTier);
 
       const loyaltyPoint = await this.__getPointConfig(
         checkResult.current_tier.id,

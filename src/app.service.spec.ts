@@ -3,11 +3,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { omit, pick } from 'lodash';
 
 import { AppService } from './app.service';
+import { ETierLevel } from './core/tier-level.enum';
 import { ETierName } from './core/tier-name.enum';
+import { ETierRemark } from './core/tier-remark.enum';
 import { LoyaltyTransactionRequestDto } from './dto/request/loyalty-transaction.request.dto';
 import { LoyaltyCustomerActual } from './entity/loyalty-customer-actual.entity';
 import { LoyaltyCustomerHistory } from './entity/loyalty-customer-history.entity';
 import { LoyaltyPointConfig } from './entity/loyalty-point-config.entity';
+import { LoyaltyTierJourney } from './entity/loyalty-tier-journey.entity';
 import { LoyaltyTierMaster } from './entity/loyalty-tier-master.entity';
 import { LoyaltyCustomerActualRepository } from './repository/loyalty-customer-actual.repository';
 import { LoyaltyCustomerHistoryRepository } from './repository/loyalty-customer-history.repository';
@@ -22,6 +25,7 @@ describe('AppService', () => {
   let mockLoyaltyCustomerHistory: LoyaltyCustomerHistory;
   let mockLoyaltyTierMaster: LoyaltyTierMaster;
   let mockLoyaltyPointConfig: LoyaltyPointConfig;
+  let mockTierJourney: LoyaltyTierJourney;
 
   const loyaltyTierMasterRepository = {
     getTierMasterById: jest.fn(),
@@ -151,7 +155,7 @@ describe('AppService', () => {
       expect(spySaveLoyaltyHistory).toHaveBeenCalledTimes(1);
     });
 
-    it('should keep current tier based on current transaction due not reach max level', async () => {
+    it('should keep current tier based on current transaction because still not reach max level', async () => {
       // arrange
       delete mockLoyaltyTierMaster.points;
 
@@ -183,7 +187,264 @@ describe('AppService', () => {
       expect(spySaveLoyaltyHistory).toHaveBeenCalledTimes(1);
     });
 
-    it('should reset tier based on current transaction due not reach max level', async () => {
+    it('should keep tier on max level due to currently loyalty is GOLD and and have gotten bonus point', async () => {
+      // arrange
+
+      const mockLoyaltyTierMasterGold: LoyaltyTierMaster = {
+        id: faker.datatype.uuid(),
+        name: ETierName.GOLD,
+        level: ETierLevel.GOLD,
+        max_trx: 7,
+        created_at: new Date(),
+        updated_at: new Date(),
+        deleted_at: null,
+        points: [mockLoyaltyPointConfig],
+      };
+
+      mockTierJourney = {
+        current_tier: mockLoyaltyTierMasterGold.id,
+        next_1: mockLoyaltyTierMasterGold.id,
+        prev_1: faker.datatype.uuid(),
+        prev_2: faker.datatype.uuid(),
+      };
+
+      delete mockLoyaltyTierMasterGold.points;
+
+      mockLoyaltyCustomerActual.total_trx = 7;
+      mockLoyaltyCustomerActual.tier = mockLoyaltyTierMasterGold;
+      mockLoyaltyCustomerActual.transaction_time = new Date(
+        '2023-01-04T16:57:11.704Z',
+      );
+
+      requestDto.customer_id = mockLoyaltyCustomerActual.customer_id;
+      requestDto.transaction_id = faker.datatype.uuid();
+      requestDto.transaction_time = new Date('2023-01-05T16:57:11.704Z');
+
+      const newCustomerLoyalty = {
+        customer_id: mockLoyaltyCustomerActual.customer_id,
+        transaction_id: requestDto.transaction_id,
+        transaction_time: requestDto.transaction_time,
+        point: 0,
+        total_trx: mockLoyaltyCustomerActual.total_trx + 1,
+        remark: ETierRemark.MAXIMUM,
+        tier: mockLoyaltyTierMasterGold,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      jest
+        .spyOn(loyaltyCustomerActualRepository, 'getCurrentLoyalty')
+        .mockResolvedValue(mockLoyaltyCustomerActual);
+
+      jest
+        .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
+        .mockResolvedValueOnce(mockLoyaltyTierMasterGold);
+
+      jest
+        .spyOn(loyaltyTierJourneyRepository, 'getTierJourneyById')
+        .mockResolvedValue(mockTierJourney);
+
+      // jest
+      //   .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
+      //   .mockResolvedValueOnce(mockLoyaltyTierMasterGold);
+
+      const spySaveCurrentLoyalty = jest
+        .spyOn(loyaltyCustomerActualRepository, 'saveCurrentLoyalty')
+        .mockResolvedValue(newCustomerLoyalty);
+
+      const spySaveLoyaltyHistory = jest
+        .spyOn(loyaltyCustomerHistoryRepository, 'saveCurrentLoyalty')
+        .mockResolvedValue(newCustomerLoyalty);
+
+      // act
+      const actualLoyalty = await appService.createNewTransaction(requestDto);
+
+      // assert
+      expect(actualLoyalty).toEqual(newCustomerLoyalty);
+      expect(spySaveCurrentLoyalty).toHaveBeenCalledTimes(1);
+      expect(spySaveLoyaltyHistory).toHaveBeenCalledTimes(1);
+    });
+
+    it('should upgrade tier based on current transaction reach max trx config', async () => {
+      // arrange
+
+      const mockLoyaltyTierMasterSilver: LoyaltyTierMaster = {
+        id: faker.datatype.uuid(),
+        name: ETierName.SILVER,
+        level: ETierLevel.SILVER,
+        max_trx: 7,
+        created_at: new Date(),
+        updated_at: new Date(),
+        deleted_at: null,
+        points: [mockLoyaltyPointConfig],
+      };
+
+      const mockLoyaltyTierMasterBronze: LoyaltyTierMaster = {
+        id: faker.datatype.uuid(),
+        name: ETierName.BRONZE,
+        level: ETierLevel.BRONZE,
+        max_trx: 7,
+        created_at: new Date(),
+        updated_at: new Date(),
+        deleted_at: null,
+        points: [mockLoyaltyPointConfig],
+      };
+
+      mockTierJourney = {
+        current_tier: mockLoyaltyTierMasterBronze.id,
+        next_1: mockLoyaltyTierMasterSilver.id,
+        prev_1: mockLoyaltyTierMasterBronze.id,
+        prev_2: mockLoyaltyTierMasterBronze.id,
+      };
+
+      delete mockLoyaltyTierMasterSilver.points;
+      delete mockLoyaltyTierMasterBronze.points;
+
+      mockLoyaltyCustomerActual.total_trx = 7;
+      mockLoyaltyCustomerActual.tier = mockLoyaltyTierMasterBronze;
+      mockLoyaltyCustomerActual.transaction_time = new Date(
+        '2023-01-04T16:57:11.704Z',
+      );
+
+      requestDto.customer_id = mockLoyaltyCustomerActual.customer_id;
+      requestDto.transaction_id = faker.datatype.uuid();
+      requestDto.transaction_time = new Date('2023-01-05T16:57:11.704Z');
+
+      const newCustomerLoyalty = {
+        customer_id: mockLoyaltyCustomerActual.customer_id,
+        transaction_id: requestDto.transaction_id,
+        transaction_time: requestDto.transaction_time,
+        point: 0,
+        total_trx: 1,
+        remark: ETierRemark.UPGRADE,
+        tier: mockLoyaltyTierMasterSilver,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      jest
+        .spyOn(loyaltyCustomerActualRepository, 'getCurrentLoyalty')
+        .mockResolvedValue(mockLoyaltyCustomerActual);
+
+      jest
+        .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
+        .mockResolvedValueOnce(mockLoyaltyTierMasterBronze);
+
+      jest
+        .spyOn(loyaltyTierJourneyRepository, 'getTierJourneyById')
+        .mockResolvedValue(mockTierJourney);
+
+      jest
+        .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
+        .mockResolvedValueOnce(mockLoyaltyTierMasterBronze);
+
+      const spySaveCurrentLoyalty = jest
+        .spyOn(loyaltyCustomerActualRepository, 'saveCurrentLoyalty')
+        .mockResolvedValue(newCustomerLoyalty);
+
+      const spySaveLoyaltyHistory = jest
+        .spyOn(loyaltyCustomerHistoryRepository, 'saveCurrentLoyalty')
+        .mockResolvedValue(newCustomerLoyalty);
+
+      // act
+      const actualLoyalty = await appService.createNewTransaction(requestDto);
+
+      // assert
+      expect(actualLoyalty).toEqual(newCustomerLoyalty);
+      expect(spySaveCurrentLoyalty).toHaveBeenCalledTimes(1);
+      expect(spySaveLoyaltyHistory).toHaveBeenCalledTimes(1);
+    });
+
+    it('should downgrade tier based on current transaction without transaction over 30 days', async () => {
+      // arrange
+
+      const mockLoyaltyTierMasterSilver: LoyaltyTierMaster = {
+        id: faker.datatype.uuid(),
+        name: ETierName.SILVER,
+        level: ETierLevel.SILVER,
+        max_trx: 7,
+        created_at: new Date(),
+        updated_at: new Date(),
+        deleted_at: null,
+        points: [mockLoyaltyPointConfig],
+      };
+
+      const mockLoyaltyTierMasterBronze: LoyaltyTierMaster = {
+        id: faker.datatype.uuid(),
+        name: ETierName.BRONZE,
+        level: ETierLevel.BRONZE,
+        max_trx: 7,
+        created_at: new Date(),
+        updated_at: new Date(),
+        deleted_at: null,
+        points: [mockLoyaltyPointConfig],
+      };
+
+      mockTierJourney = {
+        current_tier: mockLoyaltyTierMasterSilver.id,
+        next_1: faker.datatype.uuid(),
+        prev_1: mockLoyaltyTierMasterBronze.id,
+        prev_2: faker.datatype.uuid(),
+      };
+
+      delete mockLoyaltyTierMasterSilver.points;
+      delete mockLoyaltyTierMasterBronze.points;
+
+      mockLoyaltyCustomerActual.tier = mockLoyaltyTierMasterSilver;
+      mockLoyaltyCustomerActual.transaction_time = new Date(
+        '2022-12-01T16:57:11.704Z',
+      );
+
+      requestDto.customer_id = mockLoyaltyCustomerActual.customer_id;
+      requestDto.transaction_id = faker.datatype.uuid();
+      requestDto.transaction_time = new Date('2023-01-05T16:57:11.704Z');
+
+      const newCustomerLoyalty = {
+        customer_id: mockLoyaltyCustomerActual.customer_id,
+        transaction_id: requestDto.transaction_id,
+        transaction_time: requestDto.transaction_time,
+        point: 0,
+        total_trx: 1,
+        remark: ETierRemark.DOWNGRADE,
+        tier: mockLoyaltyTierMasterBronze,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      jest
+        .spyOn(loyaltyCustomerActualRepository, 'getCurrentLoyalty')
+        .mockResolvedValue(mockLoyaltyCustomerActual);
+
+      jest
+        .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
+        .mockResolvedValueOnce(mockLoyaltyTierMasterSilver);
+
+      jest
+        .spyOn(loyaltyTierJourneyRepository, 'getTierJourneyById')
+        .mockResolvedValue(mockTierJourney);
+
+      jest
+        .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
+        .mockResolvedValueOnce(mockLoyaltyTierMasterBronze);
+
+      const spySaveCurrentLoyalty = jest
+        .spyOn(loyaltyCustomerActualRepository, 'saveCurrentLoyalty')
+        .mockResolvedValue(newCustomerLoyalty);
+
+      const spySaveLoyaltyHistory = jest
+        .spyOn(loyaltyCustomerHistoryRepository, 'saveCurrentLoyalty')
+        .mockResolvedValue(newCustomerLoyalty);
+
+      // act
+      const actualLoyalty = await appService.createNewTransaction(requestDto);
+
+      // assert
+      expect(actualLoyalty).toEqual(newCustomerLoyalty);
+      expect(spySaveCurrentLoyalty).toHaveBeenCalledTimes(1);
+      expect(spySaveLoyaltyHistory).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reset tier based on current transaction without transaction over 60 days', async () => {
       // arrange
       delete mockLoyaltyTierMaster.points;
       mockLoyaltyCustomerActual.transaction_time = new Date();
