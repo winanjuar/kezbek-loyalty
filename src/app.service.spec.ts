@@ -244,10 +244,6 @@ describe('AppService', () => {
         .spyOn(loyaltyTierJourneyRepository, 'getTierJourneyById')
         .mockResolvedValue(mockTierJourney);
 
-      // jest
-      //   .spyOn(loyaltyTierMasterRepository, 'getTierMasterById')
-      //   .mockResolvedValueOnce(mockLoyaltyTierMasterGold);
-
       const spySaveCurrentLoyalty = jest
         .spyOn(loyaltyCustomerActualRepository, 'saveCurrentLoyalty')
         .mockResolvedValue(newCustomerLoyalty);
