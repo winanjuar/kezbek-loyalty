@@ -40,6 +40,7 @@ async function bootstrap() {
     )
     .setContact('Sugeng Winanjuar', null, 'winanjuar@gmail.com')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
 
   const configCustomSwagger: SwaggerCustomOptions = {
