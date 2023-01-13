@@ -16,8 +16,7 @@ export class LoyaltyCustomerActualResponseDto extends BaseResponseDto {
   statusCode: number;
 
   @ApiProperty({
-    example:
-      'Get data customer with ID 67746a2b-d693-47e1-99f5-f44572aee307 successfully',
+    example: 'This is sample get single data successfully',
   })
   message: string;
 
