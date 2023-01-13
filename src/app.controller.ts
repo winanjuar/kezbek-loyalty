@@ -74,6 +74,7 @@ export class AppController {
       );
 
       return {
+        transaction_id: data.transaction_id,
         point: loyaltyCustomer.point,
         total_trx: loyaltyCustomer.total_trx,
         remark: loyaltyCustomer.remark,
