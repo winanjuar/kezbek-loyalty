@@ -15,4 +15,8 @@ export class LoyaltyTierMasterRepository extends Repository<LoyaltyTierMaster> {
   async getTierMaster(level: number) {
     return await this.findOne({ where: { level } });
   }
+
+  async getAllTier() {
+    return await this.find({ relations: ['points'] });
+  }
 }

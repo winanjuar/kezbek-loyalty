@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { Test, TestingModule } from '@nestjs/testing';
-import { omit, pick } from 'lodash';
+import { pick } from 'lodash';
 
 import { AppService } from './app.service';
 import { ETierLevel } from './core/tier-level.enum';
@@ -14,7 +14,7 @@ import { LoyaltyTierJourney } from './entity/loyalty-tier-journey.entity';
 import { LoyaltyTierMaster } from './entity/loyalty-tier-master.entity';
 import { LoyaltyCustomerActualRepository } from './repository/loyalty-customer-actual.repository';
 import { LoyaltyCustomerHistoryRepository } from './repository/loyalty-customer-history.repository';
-import { LoyaltyPointConfigRepository } from './repository/loyalty-point-catalog.repository';
+import { LoyaltyPointConfigRepository } from './repository/loyalty-point-config.repository';
 import { LoyaltyTierJourneyRepository } from './repository/loyalty-tier-journey.repository';
 import { LoyaltyTierMasterRepository } from './repository/loyalty-tier-master.repository';
 
@@ -30,6 +30,7 @@ describe('AppService', () => {
   const loyaltyTierMasterRepository = {
     getTierMasterById: jest.fn(),
     getTierMaster: jest.fn(),
+    getAllTier: jest.fn(),
   };
 
   const loyaltyTierJourneyRepository = {
@@ -112,15 +113,112 @@ describe('AppService', () => {
       updated_at: new Date(),
     };
 
-    mockLoyaltyCustomerHistory = {
-      ...omit(mockLoyaltyCustomerActual, ['tier']),
-      tier_id: mockLoyaltyCustomerActual.tier.id,
-    };
+    mockLoyaltyCustomerHistory = mockLoyaltyCustomerActual;
   });
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('createNewCustomer', () => {
+  describe('getTierMaster', () => {
+    it('should return all tier master', async () => {
+      // arrange
+      const spyGetAllTier = jest
+        .spyOn(loyaltyTierMasterRepository, 'getAllTier')
+        .mockResolvedValue([mockLoyaltyTierMaster]);
+
+      // act
+      const tierMasters = await appService.getTierMaster();
+
+      // assert
+      expect(tierMasters).toEqual([mockLoyaltyTierMaster]);
+      expect(spyGetAllTier).toHaveBeenCalledTimes(1);
+      expect(spyGetAllTier).toHaveBeenCalledWith();
+    });
+
+    it('should return empty array when data still empty', async () => {
+      // arrange
+      const spyGetAllTier = jest
+        .spyOn(loyaltyTierMasterRepository, 'getAllTier')
+        .mockResolvedValue([]);
+
+      // act
+      const tierMasters = await appService.getTierMaster();
+
+      // assert
+      expect(tierMasters).toEqual([]);
+      expect(spyGetAllTier).toHaveBeenCalledTimes(1);
+      expect(spyGetAllTier).toHaveBeenCalledWith();
+    });
+  });
+
+  describe('getCurrentLoyalty', () => {
+    it('should return current loyalty customer', async () => {
+      // arrange
+      const customer_id = mockLoyaltyCustomerActual.customer_id;
+      const spyGetCurrentLoyalty = jest
+        .spyOn(loyaltyCustomerActualRepository, 'getCurrentLoyalty')
+        .mockResolvedValue(mockLoyaltyCustomerActual);
+
+      // act
+      const currentLoyalty = await appService.getCurrentLoyalty(customer_id);
+
+      // assert
+      expect(currentLoyalty).toEqual(mockLoyaltyCustomerActual);
+      expect(spyGetCurrentLoyalty).toHaveBeenCalledTimes(1);
+      expect(spyGetCurrentLoyalty).toHaveBeenCalledWith(customer_id);
+    });
+
+    it('should return null instead of not found', async () => {
+      // arrange
+      const customer_id = mockLoyaltyCustomerActual.customer_id;
+      const spyGetCurrentLoyalty = jest
+        .spyOn(loyaltyCustomerActualRepository, 'getCurrentLoyalty')
+        .mockResolvedValue(null);
+
+      // act
+      const currentLoyalty = await appService.getCurrentLoyalty(customer_id);
+
+      // assert
+      expect(currentLoyalty).toEqual(null);
+      expect(spyGetCurrentLoyalty).toHaveBeenCalledTimes(1);
+      expect(spyGetCurrentLoyalty).toHaveBeenCalledWith(customer_id);
+    });
+  });
+
+  describe('getLoyaltyHistory', () => {
+    it('should return loyalty history customer', async () => {
+      // arrange
+      const customer_id = mockLoyaltyCustomerHistory.customer_id;
+      const spyGetLoyaltyHistory = jest
+        .spyOn(loyaltyCustomerHistoryRepository, 'getLoyaltyHistory')
+        .mockResolvedValue(mockLoyaltyCustomerHistory);
+
+      // act
+      const loyaltyHistory = await appService.getLoyaltyHistory(customer_id);
+
+      // assert
+      expect(loyaltyHistory).toEqual(mockLoyaltyCustomerHistory);
+      expect(spyGetLoyaltyHistory).toHaveBeenCalledTimes(1);
+      expect(spyGetLoyaltyHistory).toHaveBeenCalledWith(customer_id);
+    });
+
+    it('should return empty array instead of not found', async () => {
+      // arrange
+      const customer_id = mockLoyaltyCustomerHistory.customer_id;
+      const spyGetLoyaltyHistory = jest
+        .spyOn(loyaltyCustomerHistoryRepository, 'getLoyaltyHistory')
+        .mockResolvedValue([]);
+
+      // act
+      const loyaltyHistory = await appService.getLoyaltyHistory(customer_id);
+
+      // assert
+      expect(loyaltyHistory).toEqual([]);
+      expect(spyGetLoyaltyHistory).toHaveBeenCalledTimes(1);
+      expect(spyGetLoyaltyHistory).toHaveBeenCalledWith(customer_id);
+    });
+  });
+
+  describe('createNewTransaction', () => {
     const requestDto: LoyaltyTransactionRequestDto = pick(
       mockLoyaltyCustomerActual,
       ['customer_id', 'transaction_id', 'transaction_time'],

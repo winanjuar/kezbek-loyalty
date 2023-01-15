@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsDate, IsNumber, IsString, IsUUID } from 'class-validator';
 import { LoyaltyTierMasterDto } from './loyalty-tier-master.dto';
 
-export class LoyaltyCustomerActualDto {
+export class LoyaltyCustomerDto {
   @ApiProperty()
   @IsUUID()
   customer_id: string;
@@ -27,7 +27,7 @@ export class LoyaltyCustomerActualDto {
   @IsString()
   remark: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: LoyaltyTierMasterDto })
   tier: LoyaltyTierMasterDto;
 
   @ApiProperty()

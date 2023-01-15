@@ -10,7 +10,7 @@ import { LoyaltyTierJourney } from './entity/loyalty-tier-journey.entity';
 import { LoyaltyTierMaster } from './entity/loyalty-tier-master.entity';
 import { LoyaltyCustomerActualRepository } from './repository/loyalty-customer-actual.repository';
 import { LoyaltyCustomerHistoryRepository } from './repository/loyalty-customer-history.repository';
-import { LoyaltyPointConfigRepository } from './repository/loyalty-point-catalog.repository';
+import { LoyaltyPointConfigRepository } from './repository/loyalty-point-config.repository';
 import { LoyaltyTierJourneyRepository } from './repository/loyalty-tier-journey.repository';
 import { LoyaltyTierMasterRepository } from './repository/loyalty-tier-master.repository';
 

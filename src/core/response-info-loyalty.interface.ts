@@ -1,7 +1,6 @@
 export interface IResponseInfoLoyalty {
-  transaction_id: string;
-  point: number;
+  customer_id: string;
   total_trx: number;
-  remark: string;
   tier: string;
+  max_trx: number;
 }

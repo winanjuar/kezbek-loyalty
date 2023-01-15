@@ -52,7 +52,7 @@ describe('LoyaltyTierMasterRepository', () => {
   afterEach(() => jest.clearAllMocks());
 
   describe('getTierMasterById', () => {
-    it('should return loyalty point config', async () => {
+    it('should return loyalty tier master', async () => {
       // arrange
       const tier_id = mockLoyaltyTierMaster.id;
       delete mockLoyaltyTierMaster.points;
@@ -74,10 +74,28 @@ describe('LoyaltyTierMasterRepository', () => {
   });
 
   describe('getTierMaster', () => {
-    it('should return loyalty point config', async () => {
+    it('should return loyalty tier master', async () => {
+      // arrange
+      delete mockLoyaltyTierMaster.points;
+
+      const spyFind = jest
+        .spyOn(loyaltyTierMasterRepository, 'find')
+        .mockResolvedValue([mockLoyaltyTierMaster]);
+
+      // act
+      const tierMasters = await loyaltyTierMasterRepository.getAllTier();
+
+      // assert
+      expect(tierMasters).toEqual([mockLoyaltyTierMaster]);
+      expect(spyFind).toHaveBeenCalledTimes(1);
+      expect(spyFind).toHaveBeenCalledWith({ relations: ['points'] });
+    });
+  });
+
+  describe('getAllTier', () => {
+    it('should return all tier master', async () => {
       // arrange
       const level = mockLoyaltyTierMaster.level;
-      delete mockLoyaltyTierMaster.points;
 
       const findOne = jest
         .spyOn(loyaltyTierMasterRepository, 'findOne')

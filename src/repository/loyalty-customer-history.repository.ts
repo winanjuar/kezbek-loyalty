@@ -9,7 +9,11 @@ export class LoyaltyCustomerHistoryRepository extends Repository<LoyaltyCustomer
   }
 
   async getLoyaltyHistory(customer_id: string) {
-    return this.find({ where: { customer_id } });
+    return this.find({
+      relations: ['tier'],
+      where: { customer_id },
+      order: { transaction_time: 'DESC' },
+    });
   }
 
   async saveCurrentLoyalty(data: Partial<LoyaltyCustomerHistory>) {

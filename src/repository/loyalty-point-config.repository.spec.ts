@@ -4,7 +4,7 @@ import { faker } from '@faker-js/faker';
 import { LoyaltyTierMaster } from 'src/entity/loyalty-tier-master.entity';
 import { ETierName } from 'src/core/tier-name.enum';
 import { LoyaltyPointConfig } from 'src/entity/loyalty-point-config.entity';
-import { LoyaltyPointConfigRepository } from './loyalty-point-catalog.repository';
+import { LoyaltyPointConfigRepository } from './loyalty-point-config.repository';
 
 describe('LoyaltyPointConfigRepository', () => {
   let loyaltyPointConfigRepository: LoyaltyPointConfigRepository;

@@ -3,9 +3,14 @@ import { DataSource } from 'typeorm';
 import { faker } from '@faker-js/faker';
 import { LoyaltyCustomerHistoryRepository } from './loyalty-customer-history.repository';
 import { LoyaltyCustomerHistory } from 'src/entity/loyalty-customer-history.entity';
+import { ETierName } from 'src/core/tier-name.enum';
+import { LoyaltyTierMaster } from 'src/entity/loyalty-tier-master.entity';
+import { LoyaltyPointConfig } from 'src/entity/loyalty-point-config.entity';
 
 describe('LoyaltyCustomerHistoryRepository', () => {
   let loyaltyCustomerHistoryRepository: LoyaltyCustomerHistoryRepository;
+  let mockLoyaltyTierMaster: LoyaltyTierMaster;
+  let mockLoyaltyPointConfig: LoyaltyPointConfig;
   let mockLoyaltyCustomerHistory: LoyaltyCustomerHistory[];
   let customer_id: string;
 
@@ -28,6 +33,27 @@ describe('LoyaltyCustomerHistoryRepository', () => {
 
     customer_id = faker.datatype.uuid();
 
+    mockLoyaltyPointConfig = {
+      id: faker.datatype.uuid(),
+      at_trx: faker.datatype.number(),
+      point: faker.datatype.number(),
+      created_at: new Date(),
+      updated_at: new Date(),
+      deleted_at: null,
+      tier: mockLoyaltyTierMaster,
+    };
+
+    mockLoyaltyTierMaster = {
+      id: faker.datatype.uuid(),
+      name: faker.helpers.arrayElement(Object.values(ETierName)),
+      level: faker.helpers.arrayElement([1, 2, 3]),
+      max_trx: faker.datatype.number(),
+      created_at: new Date(),
+      updated_at: new Date(),
+      deleted_at: null,
+      points: [mockLoyaltyPointConfig],
+    };
+
     mockLoyaltyCustomerHistory = [
       {
         transaction_id: faker.datatype.uuid(),
@@ -36,7 +62,7 @@ describe('LoyaltyCustomerHistoryRepository', () => {
         point: faker.datatype.number(),
         total_trx: faker.datatype.number(),
         remark: faker.datatype.string(),
-        tier_id: faker.datatype.uuid(),
+        tier: mockLoyaltyTierMaster,
         created_at: new Date(),
         updated_at: new Date(),
       },
@@ -60,7 +86,9 @@ describe('LoyaltyCustomerHistoryRepository', () => {
       expect(historyLoyalty).toEqual(mockLoyaltyCustomerHistory);
       expect(spyFind).toHaveBeenCalledTimes(1);
       expect(spyFind).toHaveBeenCalledWith({
+        relations: ['tier'],
         where: { customer_id },
+        order: { transaction_time: 'DESC' },
       });
     });
 
@@ -77,7 +105,11 @@ describe('LoyaltyCustomerHistoryRepository', () => {
       // assert
       expect(historyLoyalty).toEqual([]);
       expect(spyFind).toHaveBeenCalledTimes(1);
-      expect(spyFind).toHaveBeenCalledWith({ where: { customer_id } });
+      expect(spyFind).toHaveBeenCalledWith({
+        relations: ['tier'],
+        where: { customer_id },
+        order: { transaction_time: 'DESC' },
+      });
     });
   });
 

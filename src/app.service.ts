@@ -7,12 +7,14 @@ import { ETierRemark } from './core/tier-remark.enum';
 import { LoyaltyTransactionRequestDto } from './dto/request/loyalty-transaction.request.dto';
 import { LoyaltyCustomerActual } from './entity/loyalty-customer-actual.entity';
 import { LoyaltyCustomerActualRepository } from './repository/loyalty-customer-actual.repository';
-import { LoyaltyPointConfigRepository } from './repository/loyalty-point-catalog.repository';
+import { LoyaltyPointConfigRepository } from './repository/loyalty-point-config.repository';
 import { LoyaltyTierJourneyRepository } from './repository/loyalty-tier-journey.repository';
 import { LoyaltyTierMasterRepository } from './repository/loyalty-tier-master.repository';
 import { LoyaltyCustomerHistoryRepository } from './repository/loyalty-customer-history.repository';
 import { LoyaltyCustomerHistory } from './entity/loyalty-customer-history.entity';
 import { IUpdateTier } from './core/update-tier.interface';
+import { DateHelper } from './helpers/date.helper';
+import { IRequestCalculateLoyalty } from './core/request-calculate-loyalty.interface';
 
 @Injectable()
 export class AppService {
@@ -26,12 +28,20 @@ export class AppService {
     private loyaltyCustomerHistoryRepository: LoyaltyCustomerHistoryRepository,
   ) {}
 
-  private __getDateDiff(end: Date, start: Date): number {
-    const msInDay = 24 * 60 * 60 * 1000;
-    const endDate = new Date(end);
-    const daysDiff =
-      Math.floor((Number(endDate) - Number(start)) / msInDay) || 0;
-    return daysDiff;
+  async getTierMaster() {
+    return await this.loyaltyTierMasterRepository.getAllTier();
+  }
+
+  async getCurrentLoyalty(customer_id: string) {
+    return await this.loyaltyCustomerActualRepository.getCurrentLoyalty(
+      customer_id,
+    );
+  }
+
+  async getLoyaltyHistory(customer_id: string) {
+    return await this.loyaltyCustomerHistoryRepository.getLoyaltyHistory(
+      customer_id,
+    );
   }
 
   private async __getTierMaster(level: number) {
@@ -46,12 +56,6 @@ export class AppService {
     return await this.loyaltyPointConfigRepository.getLoyaltyPoint(
       tier_id,
       at_trx,
-    );
-  }
-
-  private async __getCurrentLoyalty(customer_id: string) {
-    return await this.loyaltyCustomerActualRepository.getCurrentLoyalty(
-      customer_id,
     );
   }
 
@@ -72,7 +76,9 @@ export class AppService {
         lastTier.name === ETierName.GOLD &&
         updateTier.total_trx >= lastTier.max_trx
       ) {
-        this.logger.log('Keep loyalty customer on maximum level');
+        this.logger.log(
+          `[${updateTier.customer_id}] Keep loyalty customer on maximum level`,
+        );
         return {
           status: ETierStatus.KEEP,
           current_tier: lastTier,
@@ -82,7 +88,9 @@ export class AppService {
       }
 
       if (updateTier.total_trx === lastTier.max_trx) {
-        this.logger.log('Upgrade loyalty customer to next level');
+        this.logger.log(
+          `[${updateTier.customer_id}] Upgrade loyalty customer to next level`,
+        );
         return {
           status: ETierStatus.UPGRADE,
           current_tier: await this.__getTierMasterById(tierJourney.next_1),
@@ -91,7 +99,9 @@ export class AppService {
         } as ITierResponse;
       }
 
-      this.logger.log('Keep loyalty customer at same level');
+      this.logger.log(
+        `[${updateTier.customer_id}] Keep loyalty customer at same level`,
+      );
       return {
         status: ETierStatus.KEEP,
         current_tier: await this.__getTierMasterById(updateTier.tier_id),
@@ -99,7 +109,9 @@ export class AppService {
         remark: ETierRemark.NONE,
       } as ITierResponse;
     } else if (updateTier.days_without_trx <= 60) {
-      this.logger.log('Downgrade loyalty customer to lower level');
+      this.logger.log(
+        `[${updateTier.customer_id}] Downgrade loyalty customer to lower level`,
+      );
       return {
         status: ETierStatus.DOWNGRADE,
         current_tier: await this.__getTierMasterById(tierJourney.prev_1),
@@ -107,7 +119,9 @@ export class AppService {
         remark: ETierRemark.DOWNGRADE,
       } as ITierResponse;
     } else {
-      this.logger.log('Reset loyalty customer to the lowest level');
+      this.logger.log(
+        `[${updateTier.customer_id}] Reset loyalty customer to the lowest level`,
+      );
       return {
         status: ETierStatus.RESET,
         current_tier: await this.__getTierMaster(ETierLevel.BRONZE),
@@ -117,19 +131,23 @@ export class AppService {
     }
   }
 
-  async createNewTransaction(loyaltyDto: LoyaltyTransactionRequestDto) {
-    const currentLoyalty = await this.__getCurrentLoyalty(
-      loyaltyDto.customer_id,
+  async createNewTransaction(
+    loyaltyData: LoyaltyTransactionRequestDto | IRequestCalculateLoyalty,
+  ) {
+    const currentLoyalty = await this.getCurrentLoyalty(
+      loyaltyData.customer_id,
     );
 
     let loyaltyCustomer: LoyaltyCustomerActual;
     if (!currentLoyalty) {
-      this.logger.log('Setting up customer loyalty for first time transaction');
+      this.logger.log(
+        `[${loyaltyData.customer_id}] Setting up customer loyalty for first time transaction`,
+      );
       const tier = await this.__getTierMaster(ETierLevel.BRONZE);
       const initialLoyalty: Partial<LoyaltyCustomerActual> = {
-        customer_id: loyaltyDto.customer_id,
-        transaction_id: loyaltyDto.transaction_id,
-        transaction_time: loyaltyDto.transaction_time,
+        customer_id: loyaltyData.customer_id,
+        transaction_id: loyaltyData.transaction_id,
+        transaction_time: loyaltyData.transaction_time,
         point: 0,
         total_trx: 1,
         tier,
@@ -137,12 +155,12 @@ export class AppService {
       };
 
       const initialHistory: Partial<LoyaltyCustomerHistory> = {
-        customer_id: loyaltyDto.customer_id,
-        transaction_id: loyaltyDto.transaction_id,
-        transaction_time: loyaltyDto.transaction_time,
+        customer_id: loyaltyData.customer_id,
+        transaction_id: loyaltyData.transaction_id,
+        transaction_time: loyaltyData.transaction_time,
         point: 0,
         total_trx: 1,
-        tier_id: tier.id,
+        tier,
         remark: ETierRemark.FIRST_TRANSACTION,
       };
 
@@ -151,12 +169,13 @@ export class AppService {
         initialHistory,
       );
     } else {
-      const dateDiff = this.__getDateDiff(
-        loyaltyDto.transaction_time,
+      const dateDiff = DateHelper.getDateDiff(
+        loyaltyData.transaction_time,
         currentLoyalty.transaction_time,
       );
 
       const updateTier: IUpdateTier = {
+        customer_id: loyaltyData.customer_id,
         tier_id: currentLoyalty.tier.id,
         total_trx: currentLoyalty.total_trx,
         days_without_trx: dateDiff,
@@ -168,8 +187,8 @@ export class AppService {
         checkResult.current_tier.id,
         checkResult.total_trx,
       );
-      currentLoyalty.transaction_time = loyaltyDto.transaction_time;
-      currentLoyalty.transaction_id = loyaltyDto.transaction_id;
+      currentLoyalty.transaction_time = loyaltyData.transaction_time;
+      currentLoyalty.transaction_id = loyaltyData.transaction_id;
       currentLoyalty.point = loyaltyPoint;
       currentLoyalty.total_trx = checkResult.total_trx;
       currentLoyalty.tier = checkResult.current_tier;
@@ -177,13 +196,13 @@ export class AppService {
       loyaltyCustomer = await this.__saveCurrentLoyalty(currentLoyalty);
 
       const loyaltyHistory: Partial<LoyaltyCustomerHistory> = {
-        customer_id: loyaltyDto.customer_id,
-        transaction_time: loyaltyDto.transaction_time,
-        transaction_id: loyaltyDto.transaction_id,
+        customer_id: loyaltyData.customer_id,
+        transaction_time: loyaltyData.transaction_time,
+        transaction_id: loyaltyData.transaction_id,
         point: loyaltyPoint,
         total_trx: checkResult.total_trx,
         remark: checkResult.remark,
-        tier_id: checkResult.current_tier.id,
+        tier: checkResult.current_tier,
       };
       await this.loyaltyCustomerHistoryRepository.saveCurrentLoyalty(
         loyaltyHistory,

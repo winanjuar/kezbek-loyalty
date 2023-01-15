@@ -3,9 +3,12 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { LoyaltyTierMaster } from './loyalty-tier-master.entity';
 
 @Entity('loyalty_customer_history')
 export class LoyaltyCustomerHistory {
@@ -28,8 +31,9 @@ export class LoyaltyCustomerHistory {
   @Column({ nullable: true })
   remark: string;
 
-  @Column('uuid')
-  tier_id: string;
+  @ManyToOne(() => LoyaltyTierMaster, (master) => master.id)
+  @JoinColumn({ name: 'tier_id' })
+  tier: LoyaltyTierMaster;
 
   @CreateDateColumn({ select: false })
   created_at: Date;
